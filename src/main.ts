@@ -32,13 +32,17 @@ export default class Processor {
 
     const matrix = await this.commit();
     await this.git.checkout("-");
-    const project = await readJson(path.join(this.config.get("workspace"), "package.json"));
+    const project = await readJson(
+      path.join(this.config.get("workspace"), "package.json")
+    );
 
     if (0 < matrix.length) {
       if (this.config.get("execute")) {
         await this.pullRequest(newBranch, project, oldone, newone, now);
       } else {
-        this.config.logger.info("git push is skipped. Because EXECUTE environment variable is not true");
+        this.config.logger.info(
+          "git push is skipped. Because EXECUTE environment variable is not true"
+        );
         this.config.logger.info(`\n${toTextTable(project, oldone, newone)}`);
       }
     } else {
@@ -46,7 +50,9 @@ export default class Processor {
     }
 
     if (!this.config.get("keep")) {
-      this.config.logger.info("Delete working branch because KEEP environment variable is not true");
+      this.config.logger.info(
+        "Delete working branch because KEEP environment variable is not true"
+      );
       await this.git.deleteBranch(newBranch);
     }
 
@@ -100,7 +106,10 @@ export default class Processor {
       this.config.logger.debug("files are changed");
       this.config.logger.trace("changed files are %o", matrix);
       await this.git.addAll();
-      await this.git.setup(this.config.get("git").username, this.config.get("git").useremail);
+      await this.git.setup(
+        this.config.get("git").username,
+        this.config.get("git").useremail
+      );
       await this.git.commit(this.config.get("git").message);
     }
     this.config.logger.debug("END   commit");
@@ -122,8 +131,10 @@ export default class Processor {
   protected async pullRequest(
     newBranch: string,
     project: PackageJson,
-    oldone: Map<string, PackageJson>, newone: Map<string, PackageJson>,
-    now: string) {
+    oldone: Map<string, PackageJson>,
+    newone: Map<string, PackageJson>,
+    now: string
+  ) {
     this.config.logger.debug("START pullRequest");
 
     await this.git.push("origin", newBranch);
@@ -145,7 +156,14 @@ export default class Processor {
     };
     this.config.logger.debug("Pull Request create");
     this.config.logger.trace(pr);
-    await github.pulls.create(pr);
+    const createdPullRequest: Octokit.Response<Octokit.PullsCreateResponse> = await github.pulls.create(pr);
+    const addLabelsParams: Octokit.IssuesAddLabelsParams = {
+      owner: origin.owner,
+      repo: origin.name,
+      issue_number: createdPullRequest.data.number,
+      labels: ["depenencies"]
+    };
+    await github.issues.addLabels(addLabelsParams);
     this.config.logger.debug("END   pullRequest");
   }
 
@@ -170,10 +188,17 @@ export default class Processor {
     return readFile(n, { encoding }).catch(() => undefined);
   }
 
-  protected async runInWorkspace(command: string, args?: string[] | string, opts?: ExecaOptions) {
+  protected async runInWorkspace(
+    command: string,
+    args?: string[] | string,
+    opts?: ExecaOptions
+  ) {
     const a = typeof args === "string" ? [args] : args;
     this.config.logger.debug("runInWorkspace %s %o", command, a);
-    const kids = execa(command, a, { cwd: this.config.get("workspace"), ...opts });
+    const kids = execa(command, a, {
+      cwd: this.config.get("workspace"),
+      ...opts
+    });
     if (this.config.logger.levelVal < 30) {
       if (kids.stdout) {
         kids.stdout.pipe(process.stdout);
@@ -192,21 +217,27 @@ export default class Processor {
     const root = await readJson(`${workspace}/package.json`);
     this.config.logger.trace(root);
     const contains = (name: string, d?: Dependencies) => d && d[name];
-    const filter = shadows ?
-      () => true :
-      ([name, _]: [string, PackageJson]) => {
-        return contains(name, root.dependencies)
-          || contains(name, root.devDependencies)
-          || contains(name, root.optionalDependencies);
-      };
+    const filter = shadows
+      ? () => true
+      : ([name, _]: [string, PackageJson]) => {
+          return (
+            contains(name, root.dependencies) ||
+            contains(name, root.devDependencies) ||
+            contains(name, root.optionalDependencies)
+          );
+        };
 
     const modules = path.join(workspace, "node_modules");
     const dirs = await rmd(modules);
     this.config.logger.trace("module directories are %o", dirs);
     if (dirs) {
-      const pkgs = await Promise.all(dirs.map((dir: string) => readJson(`${modules}/${dir}/package.json`)));
+      const pkgs = await Promise.all(
+        dirs.map((dir: string) => readJson(`${modules}/${dir}/package.json`))
+      );
       this.config.logger.trace("packages %o", pkgs);
-      const nvs = pkgs.map<[string, PackageJson]>((p: PackageJson) => [p.name, p]).filter(filter);
+      const nvs = pkgs
+        .map<[string, PackageJson]>((p: PackageJson) => [p.name, p])
+        .filter(filter);
       this.config.logger.debug("END   collectPackage");
       return new Map(nvs);
     }
